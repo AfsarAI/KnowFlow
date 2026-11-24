@@ -41,12 +41,17 @@ This roadmap outlines the structured 7-day development plan for KnowFlow, tracki
 ---
 
 ### Day 3: Document Ingestion & Processing
-**Status:** ⏳ **PLANNED**
-- [ ] Implement document upload endpoint (`POST /api/v1/documents/upload`).
-- [ ] Add file validation (MIME checking, 15MB size limits, format restriction to PDF/TXT).
-- [ ] Implement text extraction using `pypdf` with page tracking.
-- [ ] Store document metadata in `documents` table with owner foreign key.
-- [ ] Add backend tests for document upload and extraction.
+**Status:** ✅ **COMPLETED**
+- [x] Configure backend file upload limits (15MB, PDF/TXT allowed) and user-scoped safe storage.
+- [x] Update database schema with `storage_path`, `processing_status`, `page_count`, `extracted_text`, and `pages_json` columns.
+- [x] Apply Alembic migration `9ef9d7563622_add_document_extraction_fields`.
+- [x] Implement file validation service (extension checking, MIME type, empty file check, magic bytes).
+- [x] Implement page-by-page text extraction for PDF with `pypdf` and structured JSON page maps.
+- [x] Implement UTF-8 text extraction for TXT with fallback encodings.
+- [x] Implement document management service with file deletion and ownership verification.
+- [x] Implement protected document REST API endpoints (`POST /api/documents`, `GET /api/documents`, `GET /api/documents/{id}`, `DELETE /api/documents/{id}`).
+- [x] Add multi-file upload, document library management, status badges, and deletion to React dashboard UI.
+- [x] Write comprehensive backend test suite (8 document tests, 19/19 total tests passing).
 
 ---
 

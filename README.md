@@ -76,7 +76,18 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
-## 5. Supabase & Google OAuth Configuration
+## 5. Document Management API (Day 3)
+
+All document endpoints are protected and require a valid Bearer token (`Authorization: Bearer <token>`). Ownership is strictly derived from the authenticated user.
+
+- `POST /api/documents` (or `/api/v1/documents`): Upload one or multiple `.pdf` / `.txt` files (multipart/form-data, max 15MB each). Performs format validation, magic byte verification, synchronous text extraction (page-by-page for PDF with `pypdf`, UTF-8/fallback for TXT), and stores files safely in user-scoped backend storage.
+- `GET /api/documents`: List all documents belonging to the authenticated user with metadata, page counts, and processing statuses.
+- `GET /api/documents/{id}`: Retrieve detailed document info including page count, processing status, and text extraction statistics.
+- `DELETE /api/documents/{id}`: Delete a document record and clean up associated storage files from disk.
+
+---
+
+## 6. Supabase & Google OAuth Configuration
 
 For detailed step-by-step instructions on setting up Supabase Auth, Google OAuth, and JWT verification, refer to [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
 
@@ -90,14 +101,13 @@ SUPABASE_JWKS_URL=https://your-project-ref.supabase.co/auth/v1/.well-known/jwks.
 
 ---
 
-## 6. Testing
+## 7. Testing
 
 ### Run Backend Tests
 ```bash
-cd backend
-.venv/bin/pytest -v
+PYTHONPATH=backend backend/.venv/bin/pytest -v
 ```
-All 11 automated test cases pass (verifying database connectivity, pgvector extension, table schemas, missing/invalid token rejection, and automatic user record synchronization).
+All 19 automated test cases pass (verifying database connectivity, pgvector extension, table schemas, missing/invalid token rejection, automatic user record synchronization, document uploads for PDF & TXT, empty file & extension validation, multi-user document isolation, and document deletion).
 
 ### Run Frontend Build
 ```bash
@@ -108,13 +118,13 @@ Builds cleanly with TypeScript type checking and asset optimization.
 
 ---
 
-## 7. Implementation Roadmap & Current Status
+## 8. Implementation Roadmap & Current Status
 
 | Day | Milestone | Status |
 | :--- | :--- | :--- |
 | **Day 1** | Project Structure, FastAPI, Docker, pgvector, Initial Schema | **Completed** |
 | **Day 2** | Supabase Auth, Google OAuth, JWT Verification, Product UI Redesign | **Completed** |
-| **Day 3** | Document Upload, PDF/TXT Validation & Text Extraction | *Planned* |
+| **Day 3** | Document Upload, PDF/TXT Validation & Text Extraction | **Completed** |
 | **Day 4** | Chunking, Embeddings & Vector Indexing | *Planned* |
 | **Day 5** | Semantic Retrieval, Context Synthesis & Citations | *Planned* |
 | **Day 6** | Conversational Sessions & History Persistence | *Planned* |

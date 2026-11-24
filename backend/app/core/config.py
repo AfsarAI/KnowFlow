@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import computed_field
@@ -21,6 +22,11 @@ class Settings(BaseSettings):
     SUPABASE_JWKS_URL: Optional[str] = None
     SUPABASE_JWT_ISSUER: Optional[str] = None
 
+    # Document Upload & Storage Settings
+    MAX_UPLOAD_SIZE_MB: int = 15
+    ALLOWED_EXTENSIONS: list[str] = [".pdf", ".txt"]
+    UPLOAD_DIR: str = "storage/documents"
+
     # PostgreSQL & pgvector Configuration (Supports Docker local or hosted Supabase PostgreSQL)
     POSTGRES_SERVER: str = "127.0.0.1"
     POSTGRES_PORT: int = 5434
@@ -28,6 +34,10 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "knowflow"
     POSTGRES_PASSWORD: str = "knowflow_dev_password"
     DATABASE_URL: Optional[str] = None
+
+    @computed_field
+    def max_upload_size_bytes(self) -> int:
+        return self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
     @computed_field
     def sqlalchemy_database_uri(self) -> str:
@@ -43,5 +53,12 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
             f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+
+    def get_upload_root(self) -> Path:
+        """Resolve and create absolute path to upload storage directory safely."""
+        base = Path(__file__).resolve().parent.parent.parent
+        root = base / self.UPLOAD_DIR
+        root.mkdir(parents=True, exist_ok=True)
+        return root
 
 settings = Settings()

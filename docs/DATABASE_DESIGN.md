@@ -14,7 +14,7 @@ erDiagram
     CONVERSATIONS ||--o{ MESSAGES : "contains"
 
     USERS {
-        int id PK
+        uuid id PK
         string email UK
         string hashed_password
         string full_name
@@ -26,11 +26,17 @@ erDiagram
 
     DOCUMENTS {
         int id PK
-        int user_id FK
+        uuid user_id FK
         string title
         string filename
         string file_type
         int file_size_bytes
+        string storage_path
+        string processing_status
+        string error_message
+        int page_count
+        text extracted_text
+        text pages_json
         timestamp created_at
         timestamp updated_at
     }
@@ -47,7 +53,7 @@ erDiagram
 
     CONVERSATIONS {
         int id PK
-        int user_id FK
+        uuid user_id FK
         string title
         timestamp created_at
         timestamp updated_at
@@ -68,10 +74,10 @@ erDiagram
 ## 2. Table Specifications
 
 ### 2.1 `users` Table
-Stores authenticated user accounts.
-- `id` (INTEGER, Primary Key, Auto-increment)
+Stores authenticated user accounts synced with Supabase Auth.
+- `id` (UUID, Primary Key): Unique identifier matching Supabase `auth.users.id`.
 - `email` (VARCHAR(255), Unique, Indexed, Non-null): Login credential.
-- `hashed_password` (VARCHAR(255), Non-null): Salted password hash (Argon2 / bcrypt).
+- `hashed_password` (VARCHAR(255), Nullable): Retained for local fallback.
 - `full_name` (VARCHAR(255), Nullable): Display name.
 - `is_active` (BOOLEAN, Default: true, Non-null): Account state flag.
 - `is_superuser` (BOOLEAN, Default: false, Non-null): Administrative privileges.
@@ -79,13 +85,19 @@ Stores authenticated user accounts.
 - `updated_at` (TIMESTAMP WITH TIME ZONE, Non-null): Modification timestamp.
 
 ### 2.2 `documents` Table
-Stores metadata for files uploaded by users.
+Stores metadata and extracted content for files uploaded by users.
 - `id` (INTEGER, Primary Key, Auto-increment)
-- `user_id` (INTEGER, Foreign Key → `users.id` ON DELETE CASCADE, Indexed, Non-null): Owner ID.
+- `user_id` (UUID, Foreign Key → `users.id` ON DELETE CASCADE, Indexed, Non-null): Owner UUID.
 - `title` (VARCHAR(255), Non-null): Human-readable document title.
 - `filename` (VARCHAR(255), Non-null): Original file name.
-- `file_type` (VARCHAR(50), Non-null): MIME or file extension (`pdf`, `txt`).
+- `file_type` (VARCHAR(50), Non-null): File type (`pdf`, `txt`).
 - `file_size_bytes` (INTEGER, Non-null): File size in bytes.
+- `storage_path` (VARCHAR(1024), Nullable): Path on local server storage.
+- `processing_status` (VARCHAR(50), Default: "uploaded", Non-null): State (`uploaded`, `processing`, `completed`, `failed`).
+- `error_message` (TEXT, Nullable): Diagnostic error message if processing failed.
+- `page_count` (INTEGER, Nullable): Total pages extracted (for PDFs).
+- `extracted_text` (TEXT, Nullable): Full raw text aggregated across all pages.
+- `pages_json` (TEXT, Nullable): JSON array of `{ page_number: int, text: str }` for Day 4 chunking.
 - `created_at` (TIMESTAMP WITH TIME ZONE, Non-null): Upload timestamp.
 - `updated_at` (TIMESTAMP WITH TIME ZONE, Non-null): Last update timestamp.
 

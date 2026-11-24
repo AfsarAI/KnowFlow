@@ -13,8 +13,11 @@ export interface DocumentItem {
   filename: string;
   file_type: string;
   file_size: number;
-  processing_status: 'pending' | 'processing' | 'completed' | 'failed';
+  processing_status: 'uploaded' | 'processing' | 'completed' | 'failed';
+  page_count?: number | null;
+  error_message?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ConversationItem {

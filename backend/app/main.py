@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import health, auth
+from app.routers import health, auth, documents
 
 app = FastAPI(
     title="KnowFlow API",
@@ -24,3 +24,7 @@ app.include_router(health.router)
 # Authentication endpoints (supported at both /api/auth and /api/v1/auth)
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(auth.router, prefix="/api/v1/auth")
+
+# Document endpoints (supported at both /api/documents and /api/v1/documents)
+app.include_router(documents.router, prefix="/api/documents")
+app.include_router(documents.router, prefix="/api/v1/documents")

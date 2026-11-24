@@ -1,33 +1,38 @@
 import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
-import { Upload, FileText, Trash2, CheckCircle2, AlertCircle, Shield } from 'lucide-react';
-import { UploadFileItem } from '../../types';
+import { Upload, FileText, Trash2, CheckCircle2, AlertCircle, Shield, Loader2 } from 'lucide-react';
+import { UploadFileItem, DocumentItem } from '../../types';
+import { documentService } from '../../services/documentService';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DocumentUploaderProps {
   onFilesSelected?: (files: File[]) => void;
-  onProceedToChat?: () => void;
+  onUploadSuccess?: (uploaded: DocumentItem[]) => void;
 }
 
 export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   onFilesSelected,
-  onProceedToChat,
+  onUploadSuccess,
 }) => {
   const [selectedFiles, setSelectedFiles] = useState<UploadFileItem[]>([]);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { token } = useAuth();
   const allowedExtensions = ['.pdf', '.txt'];
   const maxFileSizeBytes = 15 * 1024 * 1024; // 15MB
 
   const validateAndAddFiles = (fileList: FileList | File[]) => {
     setErrorMessage(null);
+    setSuccessMessage(null);
     const newItems: UploadFileItem[] = [];
-    const validRawFiles: File[] = [];
 
     Array.from(fileList).forEach((file) => {
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
       if (!allowedExtensions.includes(ext)) {
-        setErrorMessage(`"${file.name}" has an unsupported format. Only PDF and TXT are supported.`);
+        setErrorMessage(`"${file.name}" has an unsupported format. Only PDF and TXT files are supported.`);
         return;
       }
       if (file.size > maxFileSizeBytes) {
@@ -35,7 +40,6 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         return;
       }
 
-      // Check duplicates
       const exists = selectedFiles.some((item) => item.name === file.name && item.size === file.size);
       if (!exists) {
         newItems.push({
@@ -47,7 +51,6 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           status: 'queued',
           progress: 100,
         });
-        validRawFiles.push(file);
       }
     });
 
@@ -95,6 +98,27 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     }
   };
 
+  const handleUpload = async () => {
+    if (selectedFiles.length === 0 || isUploading) return;
+    setIsUploading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const filesToUpload = selectedFiles.map((item) => item.file);
+      const results = await documentService.uploadDocuments(filesToUpload, token);
+      setSuccessMessage(`Successfully uploaded and processed ${results.length} document${results.length === 1 ? '' : 's'}.`);
+      setSelectedFiles([]);
+      if (onFilesSelected) onFilesSelected([]);
+      if (onUploadSuccess) onUploadSuccess(results);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      setErrorMessage(msg);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -133,7 +157,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           <span className="format-tag">PDF</span>
           <span className="format-tag">TXT</span>
           <span className="format-tag">Up to 15MB each</span>
-          <span className="format-tag">Select multiple files</span>
+          <span className="format-tag">Multiple files supported</span>
         </div>
       </div>
 
@@ -144,16 +168,24 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         </div>
       )}
 
+      {successMessage && (
+        <div className="uploader-success-banner">
+          <CheckCircle2 size={18} />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
       {selectedFiles.length > 0 && (
         <div className="selected-files-container">
           <div className="selected-files-header">
-            <h4>Selected Documents ({selectedFiles.length})</h4>
+            <h4>Selected for Upload ({selectedFiles.length})</h4>
             <button
               className="clear-all-btn"
               onClick={() => {
                 setSelectedFiles([]);
                 if (onFilesSelected) onFilesSelected([]);
               }}
+              disabled={isUploading}
             >
               Clear all
             </button>
@@ -183,6 +215,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                       handleRemoveFile(item.id);
                     }}
                     title="Remove file"
+                    disabled={isUploading}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -191,13 +224,22 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             ))}
           </div>
 
-          {onProceedToChat && (
-            <div className="uploader-cta-wrapper">
-              <button className="primary-action-button" onClick={onProceedToChat}>
-                Start Conversation with {selectedFiles.length} {selectedFiles.length === 1 ? 'Document' : 'Documents'} →
-              </button>
-            </div>
-          )}
+          <div className="uploader-cta-wrapper">
+            <button
+              className="primary-action-button"
+              onClick={handleUpload}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 size={18} className="spin-icon" />
+                  <span>Uploading & Extracting Text...</span>
+                </>
+              ) : (
+                <span>Upload & Process {selectedFiles.length} {selectedFiles.length === 1 ? 'Document' : 'Documents'}</span>
+              )}
+            </button>
+          </div>
         </div>
       )}
 

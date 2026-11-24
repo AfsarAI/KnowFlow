@@ -37,6 +37,12 @@ postgres_data/
 *.db
 *.sqlite
 
+# Storage and Uploads
+storage/
+backend/storage/
+*.pdf.tmp
+*.txt.tmp
+
 # IDE and OS
 .vscode/
 .idea/
