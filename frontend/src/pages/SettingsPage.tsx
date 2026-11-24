@@ -50,7 +50,7 @@ export const SettingsPage: React.FC = () => {
             <div className="settings-row">
               <span className="label">Provider Mode:</span>
               <span className="badge-pill">
-                {isConfigured ? 'Supabase Hosted Auth' : 'Local Development Mode'}
+                {isConfigured ? 'Supabase Hosted Auth' : 'Verified Database Authentication'}
               </span>
             </div>
             <div className="settings-row">

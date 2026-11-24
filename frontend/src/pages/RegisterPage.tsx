@@ -148,15 +148,18 @@ export const RegisterPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="checkbox-form-group">
-            <input
-              id="terms-check"
-              type="checkbox"
-              checked={agreedToTerms}
-              onChange={(e) => setAgreedToTerms(e.target.checked)}
-            />
-            <label htmlFor="terms-check">
-              I agree to the Terms of Service and acknowledge that my documents remain private.
+          <div className="terms-checkbox-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                required
+                disabled={isSubmitting}
+              />
+              <span>
+                I agree to the <a href="#terms" onClick={(e) => e.preventDefault()}>Terms of Service</a> and <a href="#privacy" onClick={(e) => e.preventDefault()}>Privacy Policy</a>.
+              </span>
             </label>
           </div>
 

@@ -1,14 +1,57 @@
+import datetime
 import logging
 from typing import Any
 import jwt
 from jwt import PyJWKClient, PyJWTError
 from fastapi import HTTPException, status
+from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Password hashing instance with Argon2
+password_hash = PasswordHash((Argon2Hasher(),))
+
+
+def get_password_hash(password: str) -> str:
+    """Hash a plaintext password using Argon2."""
+    return password_hash.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a plaintext password against an Argon2 hash."""
+    if not hashed_password:
+        return False
+    try:
+        return password_hash.verify(plain_password, hashed_password)
+    except Exception as exc:
+        logger.warning(f"Password verification error: {exc}")
+        return False
+
+
+def create_access_token(
+    data: dict[str, Any],
+    expires_delta: datetime.timedelta | None = None,
+) -> str:
+    """
+    Generate a signed JWT token containing user identity and metadata.
+    Signed using application SECRET_KEY with standard 24-hour expiration by default.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expire = now + (expires_delta or datetime.timedelta(hours=24))
+    to_encode = {
+        **data,
+        "exp": int(expire.timestamp()),
+        "iat": int(now.timestamp()),
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
+
+
 # Cache JWKS client instance if JWKS URL is available
 _jwk_client: PyJWKClient | None = None
+
 
 def get_jwk_client() -> PyJWKClient | None:
     global _jwk_client
@@ -26,16 +69,32 @@ def get_jwk_client() -> PyJWKClient | None:
 
 def verify_supabase_jwt(token: str) -> dict[str, Any]:
     """
-    Independently verify and decode a Supabase JWT access token.
+    Independently verify and decode a JWT access token.
     Supports:
     1. Symmetric HS256 verification using SUPABASE_JWT_SECRET.
     2. Asymmetric RS256/ES256 verification using Supabase JWKS endpoint.
-    3. Development fallback using SECRET_KEY (for local development & unit tests).
+    3. Application / Test verification with project SECRET_KEY.
     """
-    if not token:
+    if not token or not token.strip():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication token is missing",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = token.strip()
+    if token.lower() in ("undefined", "null", "none"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token is invalid: received null or undefined token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token format: expected 3-part JWT",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -81,7 +140,7 @@ def verify_supabase_jwt(token: str) -> dict[str, Any]:
             except Exception as exc:
                 verification_errors.append(f"JWKS ({alg}): {exc}")
 
-    # Method 3: Development / Test fallback with project SECRET_KEY
+    # Method 3: Local application & test verification with project SECRET_KEY
     if payload is None:
         try:
             payload = jwt.decode(

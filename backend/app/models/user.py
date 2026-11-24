@@ -16,6 +16,7 @@ class User(Base):
         index=True,
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     auth_provider: Mapped[str] = mapped_column(String(50), default="email", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

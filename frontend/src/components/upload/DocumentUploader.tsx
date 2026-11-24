@@ -2,6 +2,7 @@ import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import { Upload, FileText, Trash2, CheckCircle2, AlertCircle, Shield, Loader2 } from 'lucide-react';
 import { UploadFileItem, DocumentItem } from '../../types';
 import { documentService } from '../../services/documentService';
+import { isValidToken } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface DocumentUploaderProps {
@@ -20,7 +21,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { token } = useAuth();
+  const { token, signOut } = useAuth();
   const allowedExtensions = ['.pdf', '.txt'];
   const maxFileSizeBytes = 15 * 1024 * 1024; // 15MB
 
@@ -100,6 +101,13 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
   const handleUpload = async () => {
     if (selectedFiles.length === 0 || isUploading) return;
+
+    if (!token || !isValidToken(token)) {
+      setErrorMessage('Authentication session expired or invalid. Please sign in again.');
+      signOut();
+      return;
+    }
+
     setIsUploading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -113,6 +121,9 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
       if (onUploadSuccess) onUploadSuccess(results);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      if (msg.includes('expired') || msg.includes('Authentication required')) {
+        signOut();
+      }
       setErrorMessage(msg);
     } finally {
       setIsUploading(false);

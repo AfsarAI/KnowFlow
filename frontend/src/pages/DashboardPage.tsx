@@ -4,6 +4,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { DocumentUploader } from '../components/upload/DocumentUploader';
 import { ConversationItem, DocumentItem } from '../types';
 import { documentService } from '../services/documentService';
+import { isValidToken } from '../services/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Sparkles,
@@ -35,7 +36,7 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
 
   const fetchDocuments = useCallback(async () => {
-    if (!token) return;
+    if (!token || !isValidToken(token)) return;
     setLoadingDocs(true);
     try {
       const data = await documentService.getDocuments(token);
@@ -52,7 +53,7 @@ export const DashboardPage: React.FC = () => {
   }, [fetchDocuments]);
 
   const handleDeleteDocument = async (id: number) => {
-    if (!token || deletingId !== null) return;
+    if (!token || !isValidToken(token) || deletingId !== null) return;
     if (!window.confirm('Are you sure you want to delete this document?')) return;
 
     setDeletingId(id);

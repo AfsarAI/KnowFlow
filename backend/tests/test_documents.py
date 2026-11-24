@@ -25,6 +25,16 @@ def test_unauthenticated_document_endpoints(client: TestClient) -> None:
     fake_file = io.BytesIO(b"Hello world")
     assert client.post("/api/documents", files={"files": ("test.txt", fake_file, "text/plain")}).status_code == 401
 
+    # Verify that undefined, null, or malformed tokens are rejected with 401
+    assert client.get("/api/documents", headers={"Authorization": "Bearer undefined"}).status_code == 401
+    assert client.get("/api/documents", headers={"Authorization": "Bearer null"}).status_code == 401
+    assert client.get("/api/documents", headers={"Authorization": "Bearer dev-local-token"}).status_code == 401
+    assert client.post(
+        "/api/documents",
+        headers={"Authorization": "Bearer undefined"},
+        files={"files": ("test.txt", io.BytesIO(b"Hello"), "text/plain")},
+    ).status_code == 401
+
 
 def test_upload_valid_txt_document(client: TestClient) -> None:
     """Upload a valid plain-text document, verify synchronous extraction and persistence."""

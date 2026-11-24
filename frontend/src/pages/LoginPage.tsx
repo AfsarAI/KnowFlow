@@ -1,7 +1,7 @@
 import React, { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -36,6 +36,10 @@ export const LoginPage: React.FC = () => {
 
   const handleGoogleSignIn = async () => {
     setFormError(null);
+    if (!isConfigured) {
+      setFormError('Google OAuth is not configured. Please sign in with email and password, or set Supabase credentials.');
+      return;
+    }
     try {
       setIsSubmitting(true);
       await signInWithGoogle();
@@ -157,13 +161,6 @@ export const LoginPage: React.FC = () => {
             <ArrowRight size={18} />
           </button>
         </form>
-
-        {!isConfigured && (
-          <div className="dev-mode-notice">
-            <ShieldCheck size={16} />
-            <span>Development mode: Enter any email to explore the workspace.</span>
-          </div>
-        )}
 
         <div className="auth-footer-link">
           Don't have an account? <Link to="/register">Create an account</Link>

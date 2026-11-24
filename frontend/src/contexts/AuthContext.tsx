@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { authService } from '../services/authService';
+import { isValidToken } from '../services/apiClient';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -16,11 +17,12 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string, fullName: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-  devSignIn: (email: string, fullName: string) => Promise<void>;
   clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const AUTH_STORAGE_KEY = 'knowflow_auth_session';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -34,76 +36,113 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Synchronize authenticated session with FastAPI backend (/api/auth/me)
   const syncBackendUser = useCallback(async (authToken: string) => {
+    if (!isValidToken(authToken)) return;
     try {
       const backendProfile = await authService.getMe(authToken);
       setUser(backendProfile);
     } catch (err: unknown) {
-      console.warn('Backend user sync warning:', err);
+      console.warn('Backend user profile fetch warning:', err);
     }
   }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    // 1. Check local development session first (if Supabase is not configured)
-    const localDevSessionStr = localStorage.getItem('knowflow_dev_session');
-    if (!isSupabaseConfigured && localDevSessionStr) {
-      try {
-        const parsed = JSON.parse(localDevSessionStr);
-        if (mounted) {
-          setUser(parsed.user);
-          setToken(parsed.token);
+    // Purge any legacy dummy/mock development tokens permanently
+    localStorage.removeItem('knowflow_dev_session');
+
+    // 1. Check Supabase session first if Supabase is configured
+    if (isSupabaseConfigured) {
+      supabase.auth.getSession().then(({ data: { session: sbSession } }) => {
+        if (!mounted) return;
+        if (sbSession && isValidToken(sbSession.access_token)) {
+          setSession(sbSession);
+          setSupabaseUser(sbSession.user);
+          setToken(sbSession.access_token);
+          syncBackendUser(sbSession.access_token).finally(() => {
+            if (mounted) setLoading(false);
+          });
+          return;
+        }
+
+        // If no active Supabase session, check local authenticated session
+        checkLocalAuthSession();
+      }).catch(() => {
+        if (mounted) checkLocalAuthSession();
+      });
+
+      // Listen to Supabase auth state transitions
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (_event, currentSession) => {
+          if (!mounted) return;
+
+          if (currentSession && isValidToken(currentSession.access_token)) {
+            setSession(currentSession);
+            setSupabaseUser(currentSession.user);
+            setToken(currentSession.access_token);
+            await syncBackendUser(currentSession.access_token);
+          } else if (!currentSession) {
+            // Check if local auth session exists before wiping
+            const localStr = localStorage.getItem(AUTH_STORAGE_KEY);
+            if (!localStr) {
+              setSession(null);
+              setSupabaseUser(null);
+              setUser(null);
+              setToken(null);
+            }
+          }
           setLoading(false);
         }
-        return;
-      } catch {
-        localStorage.removeItem('knowflow_dev_session');
-      }
+      );
+
+      return () => {
+        mounted = false;
+        subscription.unsubscribe();
+      };
+    } else {
+      checkLocalAuthSession();
     }
 
-    if (!isSupabaseConfigured) {
-      if (mounted) setLoading(false);
-      return;
-    }
+    function checkLocalAuthSession() {
+      const localStr = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (localStr) {
+        try {
+          const parsed = JSON.parse(localStr);
+          if (parsed.token && isValidToken(parsed.token)) {
+            setToken(parsed.token);
+            setUser(parsed.user);
 
-    // 2. Read initial session from Supabase client
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      if (session) {
-        setSession(session);
-        setSupabaseUser(session.user);
-        setToken(session.access_token);
-        syncBackendUser(session.access_token).finally(() => {
-          if (mounted) setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // 3. Listen to auth state transitions (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, currentSession) => {
-        if (!mounted) return;
-
-        if (currentSession) {
-          setSession(currentSession);
-          setSupabaseUser(currentSession.user);
-          setToken(currentSession.access_token);
-          await syncBackendUser(currentSession.access_token);
-        } else {
-          setSession(null);
-          setSupabaseUser(null);
-          setUser(null);
-          setToken(null);
+            // Verify with backend
+            authService.getMe(parsed.token).then((profile) => {
+              if (mounted) {
+                setUser(profile);
+                setLoading(false);
+              }
+            }).catch(() => {
+              // Token expired or invalid on backend: purge session
+              localStorage.removeItem(AUTH_STORAGE_KEY);
+              if (mounted) {
+                setUser(null);
+                setToken(null);
+                setLoading(false);
+              }
+            });
+            return;
+          }
+        } catch {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
         }
+      }
+
+      if (mounted) {
+        setUser(null);
+        setToken(null);
         setLoading(false);
       }
-    );
+    }
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
   }, [syncBackendUser]);
 
@@ -111,29 +150,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     setError(null);
 
-    if (!isSupabaseConfigured) {
-      // Local dev helper if keys aren't added to .env yet
-      await devSignIn(email, email.split('@')[0]);
-      return;
+    // If Supabase is configured, try Supabase Authentication first
+    if (isSupabaseConfigured) {
+      const { data, error: authErr } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (!authErr && data.session && isValidToken(data.session.access_token)) {
+        setSession(data.session);
+        setSupabaseUser(data.user);
+        setToken(data.session.access_token);
+        await syncBackendUser(data.session.access_token);
+        setLoading(false);
+        return;
+      }
     }
 
-    const { data, error: authErr } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // Authenticate with verified backend credentials
+    try {
+      const res = await authService.login(email, password);
+      if (!isValidToken(res.access_token)) {
+        throw new Error('Received invalid authentication token format from server.');
+      }
 
-    if (authErr) {
+      localStorage.setItem(
+        AUTH_STORAGE_KEY,
+        JSON.stringify({ user: res.user, token: res.access_token })
+      );
+
+      setUser(res.user);
+      setToken(res.access_token);
+      setSession(null);
+      setSupabaseUser(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Invalid email or password.';
+      setError(msg);
       setLoading(false);
-      setError(authErr.message);
-      throw authErr;
+      throw new Error(msg);
     }
 
-    if (data.session) {
-      setSession(data.session);
-      setSupabaseUser(data.user);
-      setToken(data.session.access_token);
-      await syncBackendUser(data.session.access_token);
-    }
     setLoading(false);
   };
 
@@ -141,33 +197,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     setError(null);
 
-    if (!isSupabaseConfigured) {
-      await devSignIn(email, fullName);
-      return;
-    }
-
-    const { data, error: authErr } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    // If Supabase is configured, register with Supabase Auth
+    if (isSupabaseConfigured) {
+      const { data, error: authErr } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    });
+      });
 
-    if (authErr) {
+      if (authErr) {
+        setLoading(false);
+        setError(authErr.message);
+        throw authErr;
+      }
+
+      if (data.session && isValidToken(data.session.access_token)) {
+        setSession(data.session);
+        setSupabaseUser(data.user);
+        setToken(data.session.access_token);
+        await syncBackendUser(data.session.access_token);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Register with verified backend PostgreSQL database
+    try {
+      const res = await authService.register(email, password, fullName);
+      if (!isValidToken(res.access_token)) {
+        throw new Error('Received invalid authentication token format from server.');
+      }
+
+      localStorage.setItem(
+        AUTH_STORAGE_KEY,
+        JSON.stringify({ user: res.user, token: res.access_token })
+      );
+
+      setUser(res.user);
+      setToken(res.access_token);
+      setSession(null);
+      setSupabaseUser(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Registration failed. Please try again.';
+      setError(msg);
       setLoading(false);
-      setError(authErr.message);
-      throw authErr;
+      throw new Error(msg);
     }
 
-    if (data.session) {
-      setSession(data.session);
-      setSupabaseUser(data.user);
-      setToken(data.session.access_token);
-      await syncBackendUser(data.session.access_token);
-    }
     setLoading(false);
   };
 
@@ -176,9 +256,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
 
     if (!isSupabaseConfigured) {
-      setError('Supabase credentials (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY) are required for Google OAuth.');
+      const msg = 'Google OAuth requires Supabase authentication credentials (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY) to be configured in your environment.';
+      setError(msg);
       setLoading(false);
-      return;
+      throw new Error(msg);
     }
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -197,41 +278,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     setLoading(true);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem('knowflow_dev_session');
 
     if (isSupabaseConfigured) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.warn('Supabase signOut error:', err);
+      }
     }
 
     setSession(null);
     setSupabaseUser(null);
     setUser(null);
     setToken(null);
-    setLoading(false);
-  };
-
-  // Local development fallback login for testing before configuring Supabase keys
-  const devSignIn = async (email: string, fullName: string) => {
-    const devUserId = 'a0000000-0000-0000-0000-000000000001';
-    const devUser: User = {
-      id: devUserId,
-      email,
-      full_name: fullName || 'KnowFlow User',
-      auth_provider: 'email',
-      is_active: true,
-      created_at: new Date().toISOString(),
-    };
-
-    // Minimal dev token
-    const devToken = 'dev-local-token';
-
-    localStorage.setItem(
-      'knowflow_dev_session',
-      JSON.stringify({ user: devUser, token: devToken })
-    );
-
-    setUser(devUser);
-    setToken(devToken);
     setLoading(false);
   };
 
@@ -249,7 +310,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUpWithEmail,
         signInWithGoogle,
         signOut,
-        devSignIn,
         clearError,
       }}
     >

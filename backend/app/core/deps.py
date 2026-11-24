@@ -18,7 +18,7 @@ def get_current_user(
     """
     FastAPI dependency that:
     1. Extracts the Bearer token from the Authorization header.
-    2. Validates the JWT with verify_supabase_jwt.
+    2. Validates the JWT format and signature with verify_supabase_jwt.
     3. Resolves the user identity by UUID.
     4. Automatically synchronizes / creates the application User record in PostgreSQL if not present.
     5. Enforces user status (active vs inactive).
@@ -30,7 +30,14 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = credentials.credentials
+    token = credentials.credentials.strip()
+    if not token or token.lower() in ("undefined", "null", "none"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: Bearer token is invalid or empty",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     payload = verify_supabase_jwt(token)
 
     sub_str = payload.get("sub")
@@ -46,7 +53,7 @@ def get_current_user(
     # Look up user in local PostgreSQL database
     user = db.get(User, user_uuid)
 
-    # Extract user metadata provided by Supabase Auth / Google OAuth
+    # Extract user metadata provided by JWT claims
     email = payload.get("email") or f"{user_uuid}@knowflow.local"
     user_metadata = payload.get("user_metadata", {}) or {}
     app_metadata = payload.get("app_metadata", {}) or {}
@@ -55,7 +62,7 @@ def get_current_user(
         or user_metadata.get("name")
         or payload.get("full_name")
     )
-    provider = app_metadata.get("provider") or "email"
+    provider = app_metadata.get("provider") or payload.get("auth_provider") or "email"
 
     if user is None:
         # Check if email is already taken by another ID (edge case safety)
