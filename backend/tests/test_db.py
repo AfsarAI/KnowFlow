@@ -18,7 +18,7 @@ def test_db_session_execution(db_session: Session) -> None:
     assert result == "vector"
 
 def test_db_tables_exist(db_session: Session) -> None:
-    """Verify that all core tables are created in the database schema."""
+    """Verify that all core tables are created in the database schema with proper types."""
     result = db_session.execute(
         text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
     ).scalars().all()

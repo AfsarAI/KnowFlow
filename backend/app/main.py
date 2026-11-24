@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import health
+from app.routers import health, auth
 
 app = FastAPI(
     title="KnowFlow API",
@@ -9,6 +9,7 @@ app = FastAPI(
     description="Backend API for KnowFlow — Document-based Retrieval-Augmented Generation (RAG) knowledge assistant.",
 )
 
+# CORS Middleware allowing frontend requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,4 +18,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Public health checks
 app.include_router(health.router)
+
+# Authentication endpoints (supported at both /api/auth and /api/v1/auth)
+app.include_router(auth.router, prefix="/api/auth")
+app.include_router(auth.router, prefix="/api/v1/auth")

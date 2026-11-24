@@ -10,43 +10,41 @@ KnowFlow is architected as a modular, decoupled full-stack platform designed to 
 
 ```mermaid
 flowchart TD
-    subgraph Client_Layer["Client Tier (Frontend)"]
-        UI["React 19 SPA (TypeScript + Vite)"]
-        State["Client State & Health Checker"]
+    subgraph Client_Layer["Client Tier (Frontend - React 19 SPA)"]
+        UI["Modern AI SaaS Interface"]
+        AuthContext["Auth Context (Supabase Client)"]
+        ChatUI["Conversational Workspace & Sidebar"]
+        UploadUI["Multi-File Document Uploader"]
+    end
+
+    subgraph Auth_Provider["Identity Provider"]
+        SupabaseAuth["Supabase Auth Service"]
+        GoogleOAuth["Google Cloud OAuth"]
     end
 
     subgraph Gateway_Layer["API & Application Tier (FastAPI)"]
-        Router["FastAPI Router /api/v1"]
-        AuthMiddleware["JWT Authentication & User Scope"]
-        DocService["Document Ingestion Service (pypdf)"]
-        RAGService["Retrieval & Context Service"]
+        Router["FastAPI Routers (/api/auth, /health)"]
+        JWTMiddleware["JWT Verification (HS256 / JWKS)"]
+        UserSync["User Record Synchronization"]
         DBDep["SQLAlchemy Session Dependency"]
     end
 
     subgraph Data_Layer["Storage & Vector Tier"]
-        PG["PostgreSQL 16"]
+        PG["PostgreSQL 16 (Local or Supabase)"]
         PGVector["pgvector Extension (HNSW/IVFFlat)"]
-        DocStore["Document & Chunk Relational Tables"]
+        DocStore["UUID Scoped Documents & Chunks"]
     end
 
-    subgraph External_AI["External AI Services (Future Days)"]
-        EmbedAPI["Embedding Model API"]
-        LLMAPI["Generative LLM API"]
-    end
-
-    UI <-->|REST / JSON| Router
-    Router --> AuthMiddleware
-    AuthMiddleware --> DocService
-    AuthMiddleware --> RAGService
-    DocService --> DBDep
-    RAGService --> DBDep
+    UI --> AuthContext
+    AuthContext <-->|OAuth / Token| SupabaseAuth
+    SupabaseAuth <--> GoogleOAuth
+    UI -->|Bearer JWT| Router
+    Router --> JWTMiddleware
+    JWTMiddleware --> UserSync
+    UserSync --> DBDep
     DBDep --> PG
     PG --- PGVector
     PG --- DocStore
-
-    DocService -.->|Day 4: Vectors| EmbedAPI
-    RAGService -.->|Day 5: Query Embed| EmbedAPI
-    RAGService -.->|Day 5: Synthesis| LLMAPI
 ```
 
 ---
@@ -55,46 +53,28 @@ flowchart TD
 
 ### 2.1 Client Layer (Frontend)
 - **Framework:** React 19, TypeScript, Vite.
-- **Role:** Single Page Application (SPA) providing intuitive user interfaces for document upload, conversational querying, citation inspection, and account management.
-- **Boundaries:** Zero access to database credentials or third-party AI provider API keys. All state queries and mutations pass through the FastAPI backend via structured REST endpoints.
+- **Design Philosophy:** Minimalist dark navy/slate AI assistant (inspired by modern conversational intelligence interfaces like ChatGPT and Gemini).
+- **Security:** Zero access to database credentials or third-party service role keys. Authenticated state managed securely with Supabase persistent sessions and Bearer token headers.
+- **Routing:** Protected route guards redirecting unauthenticated traffic to `/login`.
 
-### 2.2 Application Layer (FastAPI Backend)
+### 2.2 Identity & Authentication Tier
+- **Provider:** Supabase Auth with Google OAuth and Email/Password flows.
+- **Tokens:** Stateless JSON Web Tokens (JWT) containing subject UUID (`sub`), email, and user metadata.
+
+### 2.3 Application Layer (FastAPI Backend)
 - **Framework:** Python 3.12, FastAPI, Pydantic v2.
-- **Role:** Central orchestrator managing business logic, document validation, layout-aware text extraction, chunking, and database operations.
-- **Dependency Injection:** Database sessions are provisioned per request via `get_db()`, guaranteeing proper cleanup, rollback on exception, and connection pooling.
-- **Configuration Management:** Environment-driven settings loaded via `pydantic-settings`, preventing secrets from being embedded into the source tree.
+- **Security Boundary:** Independent cryptographic verification of Supabase JWTs without trusting client-side claims.
+- **Tenant Isolation:** Enforces user ownership (`user_id = token.sub`) on all document and chat queries.
 
-### 2.3 Storage & Vector Layer (PostgreSQL & pgvector)
-- **Engine:** PostgreSQL 16 with the official `pgvector` extension (v0.8.7).
-- **Role:** Unified persistence for relational data (users, documents, conversations, messages) and vector data (dense chunk embeddings).
-- **Isolation:** Enforces relational integrity using foreign keys with `ON DELETE CASCADE`.
-
-### 2.4 AI Integration Layer (Planned Days 4 & 5)
-- **Embedding Provider:** Converts cleaned document text chunks and incoming user queries into dense numerical vectors.
-- **LLM Provider:** Generates grounded answers based strictly on retrieved context passages with citation anchors.
+### 2.4 Storage & Vector Layer (PostgreSQL & pgvector)
+- **Engine:** PostgreSQL 16 with `pgvector` extension (v0.8.7).
+- **Compatibility:** Operates interchangeably with local Docker PostgreSQL and hosted Supabase PostgreSQL.
+- **Data Models:** All user-scoped tables (`documents`, `conversations`) reference `users.id` (UUID) with `ON DELETE CASCADE`.
 
 ---
 
 ## 3. Communication & Security Boundaries
 
-### 3.1 Authentication & Authorization
-- **Token Mechanism:** Stateless JSON Web Tokens (JWT) using HMAC-SHA256 or asymmetric signing.
-- **Tenant Isolation:** Every document, document chunk, conversation, and message is linked to a specific `user_id`. Queries unconditionally enforce `WHERE user_id = :current_user_id` before similarity search or retrieval to prevent cross-user data leakage.
-
-### 3.2 Content Sanitization & Untrusted Data Handling
-- Uploaded files are treated strictly as **untrusted passive data**, never executed or interpreted as instructions.
-- File headers, MIME types, and maximum sizes are validated before text extraction.
-- Retrieved document text inserted into LLM prompt templates is enclosed within explicit structural context fences to mitigate indirect prompt injection.
-
----
-
-## 4. Current Implementation Status (Day 1)
-
-| Component | Status | Description |
-| :--- | :--- | :--- |
-| **Project Structure** | Implemented | Clean modular directories for backend, frontend, docs, and docker. |
-| **PostgreSQL 16 & pgvector** | Implemented | Docker Compose container running pgvector 0.8.7 with persistent volume. |
-| **FastAPI Backend** | Implemented | Modular app with `/health`, `/health/db`, and OpenAPI docs at `/docs`. |
-| **SQLAlchemy & Alembic** | Implemented | DeclarativeBase, session manager, and initial schema migration executed. |
-| **React Frontend** | Implemented | React 19 + TypeScript + Vite with live health dashboard and roadmap display. |
-| **Vector Columns** | Deferred | Intentionally deferred to Day 4 to match final embedding model dimensions. |
+1. **Zero Client Trust:** The frontend never decides resource ownership or passes plain user IDs for authorization.
+2. **Cascading Erasure:** Deleting a document or user automatically purges associated chunks and conversation history.
+3. **Prompt Injection Boundary:** Uploaded documents are treated as untrusted text, separated by explicit delimiters during RAG synthesis.

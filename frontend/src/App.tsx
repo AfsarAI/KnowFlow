@@ -1,32 +1,70 @@
 import React from 'react';
-import { Dashboard } from './components/Dashboard';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { ChatPage } from './pages/ChatPage';
+import { SettingsPage } from './pages/SettingsPage';
 import './App.css';
+
+const RootRedirect: React.FC = () => {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
+  return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
+};
 
 export const App: React.FC = () => {
   return (
-    <div className="app-shell">
-      <nav className="navbar">
-        <div className="nav-brand">
-          <span className="brand-logo">🌊</span>
-          <span className="brand-name">KnowFlow</span>
-          <span className="brand-version">v0.1.0-alpha</span>
-        </div>
-        <div className="nav-links">
-          <a href="#roadmap" className="nav-link">Roadmap</a>
-          <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noreferrer" className="nav-link">
-            API Docs ↗
-          </a>
-        </div>
-      </nav>
-
-      <main className="main-content">
-        <Dashboard />
-      </main>
-
-      <footer className="footer">
-        <p>KnowFlow • KF-04 Full-Stack RAG Knowledge Assistant • Day 1 Project Foundation</p>
-      </footer>
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/:id"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 };
 
