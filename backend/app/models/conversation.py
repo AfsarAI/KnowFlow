@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from sqlalchemy import String, Integer, ForeignKey, DateTime
+from sqlalchemy import String, Integer, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
@@ -16,6 +16,7 @@ class Conversation(Base):
         nullable=False,
     )
     title: Mapped[str] = mapped_column(String(255), default="New Chat", nullable=False)
+    selected_document_ids: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array of document IDs
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),

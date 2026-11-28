@@ -26,6 +26,7 @@ class Document(Base):
     )  # "uploaded", "processing", "completed", "failed"
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     pages_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(

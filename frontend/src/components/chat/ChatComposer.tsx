@@ -1,19 +1,26 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Send, FileText } from 'lucide-react';
+import { Send, FileText, Check, ChevronDown, Filter } from 'lucide-react';
+import { DocumentItem } from '../../types';
 
 interface ChatComposerProps {
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, documentIds?: number[]) => void;
   disabled?: boolean;
-  documentCount?: number;
+  documents?: DocumentItem[];
+  selectedDocIds?: number[];
+  onSelectDocIds?: (ids: number[]) => void;
 }
 
 export const ChatComposer: React.FC<ChatComposerProps> = ({
   onSendMessage,
   disabled = false,
-  documentCount = 0,
+  documents = [],
+  selectedDocIds = [],
+  onSelectDocIds,
 }) => {
   const [content, setContent] = useState('');
+  const [scopeDropdownOpen, setScopeDropdownOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -21,6 +28,17 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
     }
   }, [content]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setScopeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -31,25 +49,93 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
 
   const handleSend = () => {
     if (!content.trim() || disabled) return;
-    onSendMessage(content.trim());
+    const docScope = selectedDocIds.length > 0 ? selectedDocIds : undefined;
+    onSendMessage(content.trim(), docScope);
     setContent('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
   };
 
+  const toggleDocument = (id: number) => {
+    if (!onSelectDocIds) return;
+    if (selectedDocIds.includes(id)) {
+      onSelectDocIds(selectedDocIds.filter((docId) => docId !== id));
+    } else {
+      onSelectDocIds([...selectedDocIds, id]);
+    }
+  };
+
+  const selectAll = () => {
+    if (!onSelectDocIds) return;
+    onSelectDocIds([]);
+  };
+
+  const isAllSelected = selectedDocIds.length === 0;
+
   return (
     <div className="chat-composer-container">
-      {documentCount > 0 ? (
-        <div className="composer-context-badge">
-          <FileText size={13} />
-          <span>Active Context: {documentCount} {documentCount === 1 ? 'document' : 'documents'} selected</span>
+      <div className="composer-toolbar-row">
+        <div className="scope-selector-wrapper" ref={dropdownRef}>
+          <button
+            type="button"
+            className="scope-toggle-btn"
+            onClick={() => setScopeDropdownOpen(!scopeDropdownOpen)}
+            disabled={disabled || documents.length === 0}
+          >
+            <Filter size={13} />
+            <span>
+              {documents.length === 0
+                ? 'No documents uploaded'
+                : isAllSelected
+                ? `All Documents (${documents.length})`
+                : `${selectedDocIds.length} of ${documents.length} Selected`}
+            </span>
+            <ChevronDown size={13} />
+          </button>
+
+          {scopeDropdownOpen && documents.length > 0 && (
+            <div className="scope-dropdown-menu">
+              <div className="dropdown-header-label">Document Retrieval Scope</div>
+              <div
+                className={`dropdown-item-option ${isAllSelected ? 'selected' : ''}`}
+                onClick={() => {
+                  selectAll();
+                  setScopeDropdownOpen(false);
+                }}
+              >
+                <div className="doc-option-check">
+                  {isAllSelected && <Check size={13} />}
+                </div>
+                <span>All uploaded documents</span>
+              </div>
+
+              <div className="dropdown-divider" />
+
+              <div className="dropdown-docs-list">
+                {documents.map((doc) => {
+                  const isChecked = selectedDocIds.includes(doc.id);
+                  return (
+                    <div
+                      key={doc.id}
+                      className={`dropdown-item-option ${isChecked ? 'selected' : ''}`}
+                      onClick={() => toggleDocument(doc.id)}
+                    >
+                      <div className="doc-option-check">
+                        {isChecked && <Check size={13} />}
+                      </div>
+                      <FileText size={13} className="doc-icon" />
+                      <span className="doc-title-text" title={doc.filename}>
+                        {doc.filename}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="composer-context-badge no-doc">
-          <span>No documents selected for this chat yet</span>
-        </div>
-      )}
+      </div>
 
       <div className="composer-input-box">
         <textarea
@@ -74,7 +160,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
       </div>
 
       <div className="composer-disclaimer">
-        KnowFlow uses document-grounded retrieval. Full vector embeddings & RAG synthesis pipeline will activate in Days 3–5.
+        KnowFlow answers are strictly grounded in your uploaded documents with verifiable citations.
       </div>
     </div>
   );

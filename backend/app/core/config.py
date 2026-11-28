@@ -27,6 +27,29 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".txt"]
     UPLOAD_DIR: str = "storage/documents"
 
+    # AI & Embedding Provider Configuration
+    AI_PROVIDER: str = "openai"  # "openai" or "gemini"
+
+    # OpenAI Settings (default embedding dimension: 1536)
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+
+    # Google Gemini Settings (alternative provider)
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
+    GEMINI_CHAT_MODEL: str = "gemini-1.5-flash"
+
+    # Vector Dimension & Chunking Strategy
+    EMBEDDING_DIMENSION: int = 1536
+    CHUNK_SIZE: int = 500  # Target characters per chunk
+    CHUNK_OVERLAP: int = 80  # Overlapping characters between consecutive chunks
+
+    # Semantic Retrieval & Context Generation
+    RAG_TOP_K: int = 5
+    RAG_SIMILARITY_THRESHOLD: float = 0.30
+
     # PostgreSQL & pgvector Configuration (Supports Docker local or hosted Supabase PostgreSQL)
     POSTGRES_SERVER: str = "127.0.0.1"
     POSTGRES_PORT: int = 5434

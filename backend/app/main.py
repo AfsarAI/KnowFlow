@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import health, auth, documents
+from app.routers import health, auth, documents, chat, conversations
 
 app = FastAPI(
     title="KnowFlow API",
@@ -28,3 +28,11 @@ app.include_router(auth.router, prefix="/api/v1/auth")
 # Document endpoints (supported at both /api/documents and /api/v1/documents)
 app.include_router(documents.router, prefix="/api/documents")
 app.include_router(documents.router, prefix="/api/v1/documents")
+
+# Chat / RAG endpoints (supported at both /api/chat and /api/v1/chat)
+app.include_router(chat.router, prefix="/api/chat")
+app.include_router(chat.router, prefix="/api/v1/chat")
+
+# Conversation session endpoints (supported at both /api/conversations and /api/v1/conversations)
+app.include_router(conversations.router, prefix="/api/conversations")
+app.include_router(conversations.router, prefix="/api/v1/conversations")

@@ -11,17 +11,20 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  Trash2,
 } from 'lucide-react';
 
 interface SidebarProps {
   conversations: ConversationItem[];
   onNewChat: () => void;
+  onDeleteConversation?: (id: number) => void;
   documentCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   conversations,
   onNewChat,
+  onDeleteConversation,
   documentCount = 0,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -34,11 +37,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     c.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleDelete = (e: React.MouseEvent, convId: number) => {
+    e.stopPropagation();
+    if (onDeleteConversation) {
+      onDeleteConversation(convId);
+    }
+  };
+
   return (
     <aside className={`app-sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
         {!collapsed && (
-          <div className="sidebar-logo" onClick={() => navigate('/dashboard')}>
+          <div className="sidebar-logo" onClick={() => navigate('/dashboard')} role="button">
             <div className="logo-symbol">KF</div>
             <span className="logo-text">KnowFlow</span>
           </div>
@@ -79,15 +89,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               role="button"
             >
               <FileText size={16} />
-              <span>Documents ({documentCount})</span>
+              <span>Document Library ({documentCount})</span>
             </div>
           </div>
 
           <div className="sidebar-conversations-list">
-            <div className="conversations-group-title">Recent Conversations</div>
+            <div className="conversations-group-title">Conversations</div>
             {filteredConversations.length === 0 ? (
               <div className="empty-conversations-hint">
-                {searchQuery ? 'No matching chats' : 'No conversations yet'}
+                {searchQuery ? 'No matching conversations' : 'No conversations yet'}
               </div>
             ) : (
               filteredConversations.map((conv) => (
@@ -97,59 +107,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => navigate(`/chat/${conv.id}`)}
                 >
                   <MessageSquare size={16} className="conv-icon" />
-                  <span className="conv-title">{conv.title}</span>
+                  <span className="conv-title" title={conv.title}>
+                    {conv.title}
+                  </span>
+                  {onDeleteConversation && (
+                    <button
+                      className="conv-delete-btn"
+                      onClick={(e) => handleDelete(e, conv.id)}
+                      title="Delete conversation"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               ))
             )}
           </div>
 
           <div className="sidebar-footer">
-            <div className="sidebar-user-info">
+            <div className="user-profile-badge">
               <div className="user-avatar-circle">
-                {user?.full_name ? user.full_name[0].toUpperCase() : 'U'}
+                {user?.full_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
               </div>
-              <div className="user-details">
-                <span className="user-name">{user?.full_name || 'User'}</span>
-                <span className="user-email">{user?.email}</span>
+              <div className="user-info-text">
+                <span className="user-display-name">{user?.full_name || 'KnowFlow User'}</span>
+                <span className="user-email-text">{user?.email}</span>
               </div>
             </div>
 
-            <div className="sidebar-footer-actions">
+            <div className="sidebar-footer-controls">
               <button
-                className="footer-action-btn"
+                className="footer-icon-btn"
                 onClick={() => navigate('/settings')}
                 title="Settings"
               >
-                <Settings size={18} />
+                <Settings size={17} />
               </button>
               <button
-                className="footer-action-btn"
-                onClick={signOut}
-                title="Log out"
+                className="footer-icon-btn"
+                onClick={() => signOut()}
+                title="Sign Out"
               >
-                <LogOut size={18} />
+                <LogOut size={17} />
               </button>
             </div>
           </div>
         </>
-      )}
-
-      {collapsed && (
-        <div className="collapsed-icon-list">
-          <button className="collapsed-action-btn" onClick={onNewChat} title="New Chat">
-            <Plus size={20} />
-          </button>
-          <button
-            className="collapsed-action-btn"
-            onClick={() => navigate('/dashboard')}
-            title="Documents"
-          >
-            <FileText size={20} />
-          </button>
-          <button className="collapsed-action-btn" onClick={signOut} title="Sign Out">
-            <LogOut size={20} />
-          </button>
-        </div>
       )}
     </aside>
   );

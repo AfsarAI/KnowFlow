@@ -21,25 +21,21 @@ export interface DocumentItem {
   file_size: number;
   processing_status: 'uploaded' | 'processing' | 'completed' | 'failed';
   page_count?: number | null;
+  chunk_count?: number | null;
   error_message?: string | null;
   created_at: string;
   updated_at?: string;
 }
 
-export interface ConversationItem {
-  id: number;
-  user_id: string;
-  title: string;
-  created_at: string;
-  updated_at: string;
-  last_message?: string;
-}
-
 export interface CitationItem {
-  id?: number;
-  document_name: string;
-  page_number?: number;
-  excerpt: string;
+  document_id: number;
+  filename: string;
+  document_name?: string;
+  page_number?: number | null;
+  chunk_index: number;
+  snippet: string;
+  excerpt?: string;
+  similarity?: number | null;
 }
 
 export interface MessageItem {
@@ -50,6 +46,24 @@ export interface MessageItem {
   sources?: CitationItem[];
   created_at: string;
   isStreaming?: boolean;
+}
+
+export interface ConversationItem {
+  id: number;
+  user_id: string;
+  title: string;
+  selected_document_ids?: number[] | null;
+  created_at: string;
+  updated_at: string;
+  last_message?: string | null;
+}
+
+export interface ChatResponseData {
+  conversation_id: number;
+  user_message: MessageItem;
+  assistant_message: MessageItem;
+  citations: CitationItem[];
+  insufficient_evidence: boolean;
 }
 
 export interface UploadFileItem {

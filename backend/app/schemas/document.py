@@ -12,6 +12,7 @@ class DocumentResponse(BaseModel):
     file_size: int
     processing_status: str
     page_count: int | None = None
+    chunk_count: int | None = 0
     error_message: str | None = None
     created_at: datetime.datetime
     updated_at: datetime.datetime

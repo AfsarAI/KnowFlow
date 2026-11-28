@@ -4,6 +4,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { DocumentUploader } from '../components/upload/DocumentUploader';
 import { ConversationItem, DocumentItem } from '../types';
 import { documentService } from '../services/documentService';
+import { chatService } from '../services/chatService';
 import { isValidToken } from '../services/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -22,35 +23,31 @@ export const DashboardPage: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loadingDocs, setLoadingDocs] = useState<boolean>(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [conversations, setConversations] = useState<ConversationItem[]>([
-    {
-      id: 1,
-      user_id: 'default',
-      title: 'Project Overview & Research Notes',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
 
   const { token } = useAuth();
   const navigate = useNavigate();
 
-  const fetchDocuments = useCallback(async () => {
+  const fetchDocumentsAndChats = useCallback(async () => {
     if (!token || !isValidToken(token)) return;
     setLoadingDocs(true);
     try {
-      const data = await documentService.getDocuments(token);
-      setDocuments(data);
+      const [docData, convData] = await Promise.all([
+        documentService.getDocuments(token),
+        chatService.getConversations(token),
+      ]);
+      setDocuments(docData);
+      setConversations(convData);
     } catch (err) {
-      console.error('Failed to load documents:', err);
+      console.error('Failed to load dashboard data:', err);
     } finally {
       setLoadingDocs(false);
     }
   }, [token]);
 
   useEffect(() => {
-    fetchDocuments();
-  }, [fetchDocuments]);
+    fetchDocumentsAndChats();
+  }, [fetchDocumentsAndChats]);
 
   const handleDeleteDocument = async (id: number) => {
     if (!token || !isValidToken(token) || deletingId !== null) return;
@@ -69,18 +66,19 @@ export const DashboardPage: React.FC = () => {
   };
 
   const handleNewChat = () => {
-    const newId = Date.now();
-    const newConv: ConversationItem = {
-      id: newId,
-      user_id: 'default',
-      title: documents.length > 0
-        ? `Chat: ${documents[0].filename.replace(/\.[^/.]+$/, '')}`
-        : 'New Document Chat',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    setConversations([newConv, ...conversations]);
-    navigate(`/chat/${newId}`);
+    navigate('/chat');
+  };
+
+  const handleDeleteConversation = async (convId: number) => {
+    if (!token || !isValidToken(token)) return;
+    if (!window.confirm('Are you sure you want to delete this conversation?')) return;
+    try {
+      await chatService.deleteConversation(convId, token);
+      setConversations((prev) => prev.filter((c) => c.id !== convId));
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+      alert('Could not delete conversation.');
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -96,6 +94,7 @@ export const DashboardPage: React.FC = () => {
       <Sidebar
         conversations={conversations}
         onNewChat={handleNewChat}
+        onDeleteConversation={handleDeleteConversation}
         documentCount={documents.length}
       />
 
@@ -114,7 +113,7 @@ export const DashboardPage: React.FC = () => {
 
           <div className="uploader-section-wrapper">
             <DocumentUploader
-              onUploadSuccess={() => fetchDocuments()}
+              onUploadSuccess={() => fetchDocumentsAndChats()}
             />
           </div>
 
